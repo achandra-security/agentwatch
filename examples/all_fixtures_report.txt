@@ -1,0 +1,110 @@
+agentwatch detection report
+===========================
+inputs: fixtures/benign_session.jsonl, fixtures/cross_tenant_retrieval.jsonl, fixtures/delegation_abuse.jsonl, fixtures/indirect_injection_exfil.jsonl, fixtures/unapproved_destructive_actions.jsonl
+events analyzed: 29
+findings: 13
+by severity: critical=6, high=5, medium=2
+
+[CRITICAL] AW-001 Cross-tenant resource access
+  session:  s-tenant
+  agent:    support-agent
+  when:     2026-09-01T14:00:15Z
+  why:      Agent 'support-agent' in a session bound to tenant 'tenant-acme' performed a write via 'vector_upsert' on 'vector://kb/globex/faq', which belongs to tenant 'tenant-globex'.
+  evidence: s-tenant-e04
+  respond:  Block the call path, confirm retrieval-time tenant filters, review data returned to the session.
+
+[CRITICAL] AW-004 Sensitive data read followed by egress to non-allowlisted destination
+  session:  s-inject
+  agent:    mail-assistant
+  when:     2026-09-01T14:00:15Z
+  why:      Suspicious tool-call sequence by 'mail-assistant': sensitive read ('crm_export_contacts') -> egress to non-allowlisted host ('http_post'), within 30 minutes.
+  evidence: s-inject-e03, s-inject-e04
+  respond:  Block the destination, revoke the agent's egress capability, and scope the disclosure.
+
+[CRITICAL] AW-002 Irreversible action without valid human approval
+  session:  s-destroy
+  agent:    ops-agent
+  when:     2026-09-01T14:00:15Z
+  why:      Irreversible tool 'delete_database' executed by 'ops-agent': no approval event references tool call 'c2'.
+  evidence: s-destroy-e04
+  respond:  Treat as unauthorized change: suspend the agent credential, restore from backup, review approval gate.
+
+[CRITICAL] AW-002 Irreversible action without valid human approval
+  session:  s-destroy
+  agent:    ops-agent
+  when:     2026-09-01T14:00:25Z
+  why:      Irreversible tool 'rotate_root_keys' executed by 'ops-agent': the approval came from an agent principal ('ops-agent'), not a human.
+  evidence: s-destroy-e05, s-destroy-e06
+  respond:  Treat as unauthorized change: suspend the agent credential, restore from backup, review approval gate.
+
+[CRITICAL] AW-002 Irreversible action without valid human approval
+  session:  s-destroy
+  agent:    ops-agent
+  when:     2026-09-01T14:00:40Z
+  why:      Irreversible tool 'purge_backups' executed by 'ops-agent': approval was explicitly denied by 'user:dana' and the call ran anyway.
+  evidence: s-destroy-e08, s-destroy-e09
+  respond:  Treat as unauthorized change: suspend the agent credential, restore from backup, review approval gate.
+
+[CRITICAL] AW-005 Security control change followed by irreversible action
+  session:  s-destroy
+  agent:    ops-agent
+  when:     2026-09-01T14:00:40Z
+  why:      Suspicious tool-call sequence by 'ops-agent': security control change ('set_audit_logging') -> irreversible action ('purge_backups'), within 30 minutes.
+  evidence: s-destroy-e07, s-destroy-e09
+  respond:  Restore the control, preserve evidence, suspend the agent, and review the delegated scopes.
+
+[HIGH] AW-006 Delegation grants scopes the delegator does not hold
+  session:  s-delegate
+  agent:    orchestrator
+  when:     2026-09-01T14:00:05Z
+  why:      'orchestrator' delegated to 'crm-worker' with scopes ['crm.write'] that 'orchestrator' does not hold (parent scopes: ['crm.read', 'mail.send']).
+  evidence: s-delegate-e02
+  respond:  Reject the delegation at the token issuer; delegated tokens should only ever narrow scope.
+
+[HIGH] AW-001 Cross-tenant resource access
+  session:  s-tenant
+  agent:    support-agent
+  when:     2026-09-01T14:00:10Z
+  why:      Agent 'support-agent' in a session bound to tenant 'tenant-acme' performed a read via 'vector_query' on 'vector://kb/globex/contracts', which belongs to tenant 'tenant-globex'.
+  evidence: s-tenant-e03
+  respond:  Block the call path, confirm retrieval-time tenant filters, review data returned to the session.
+
+[HIGH] AW-003 Privileged action shortly after untrusted content ingestion
+  session:  s-inject
+  agent:    mail-assistant
+  when:     2026-09-01T14:00:15Z
+  why:      Agent 'mail-assistant' performed an egress action ('http_post') within 15 minutes of ingesting untrusted content from: inbound email from external sender.
+  evidence: s-inject-e02, s-inject-e04
+  respond:  Confirm with the principal that the action was requested; inspect the ingested content for injected instructions.
+
+[HIGH] AW-008 Tool call from unbound or mismatched workload identity
+  session:  s-delegate
+  agent:    enricher  (chain: orchestrator -> crm-worker -> enricher)
+  when:     2026-09-01T14:00:25Z
+  why:      Agent 'enricher' is bound to workload 'spiffe://example.test/agents/enricher' but the call to 'crm_read' came from 'spiffe://example.test/agents/unknown-runner'.
+  evidence: s-delegate-e06
+  respond:  Quarantine the calling workload and verify how it obtained the agent's credentials.
+
+[HIGH] AW-009 Tool call outside the agent's delegated scopes
+  session:  s-delegate
+  agent:    scraper  (chain: orchestrator -> crm-worker -> enricher -> scraper)
+  when:     2026-09-01T14:00:30Z
+  why:      'scraper' called 'mail_send', which requires scope 'mail.send'; granted scopes are ['crm.read'].
+  evidence: s-delegate-e07
+  respond:  Confirm the authorization layer enforces scopes; this call should have been denied upstream.
+
+[MEDIUM] AW-007 Delegation chain exceeds maximum depth
+  session:  s-delegate
+  agent:    enricher  (chain: orchestrator -> crm-worker -> enricher)
+  when:     2026-09-01T14:00:15Z
+  why:      Delegation depth 3 exceeds the configured maximum of 2: orchestrator -> crm-worker -> enricher -> scraper.
+  evidence: s-delegate-e04
+  respond:  Cap delegation depth at the orchestrator and require re-authorization beyond the limit.
+
+[MEDIUM] AW-008 Tool call from unbound or mismatched workload identity
+  session:  s-delegate
+  agent:    ghost-agent
+  when:     2026-09-01T14:00:35Z
+  why:      Agent 'ghost-agent' called 'crm_read' but was never bound to a workload identity in this session (no session.start or agent.delegate for it).
+  evidence: s-delegate-e08
+  respond:  Quarantine the calling workload and verify how it obtained the agent's credentials.
