@@ -1,5 +1,7 @@
 # agentwatch
 
+[![CI](https://github.com/achandra-security/agentwatch/actions/workflows/ci.yml/badge.svg)](https://github.com/achandra-security/agentwatch/actions/workflows/ci.yml)
+
 **Behavioral detection for AI agent execution telemetry.**
 
 agentwatch is a reference implementation that replays normalized agent telemetry, including tool calls, delegation, approvals, and content provenance, through a set of explainable detection rules. It is written for detection engineers who need to answer questions such as "did an agent act across tenants?", "did anything irreversible run without a human saying yes?", and "does this session look like an indirect prompt injection that turned into exfiltration?"
